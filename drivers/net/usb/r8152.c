@@ -2937,6 +2937,8 @@ static int rtl8152_open(struct net_device *netdev)
 		netif_warn(tp, ifup, netdev, "intr_urb submit failed: %d\n",
 			   res);
 		free_all_mem(tp);
+	} else {
+		tasklet_enable(&tp->tl);
 	}
 
 	mutex_unlock(&tp->control);
@@ -2952,6 +2954,7 @@ static int rtl8152_close(struct net_device *netdev)
 	struct r8152 *tp = netdev_priv(netdev);
 	int res = 0;
 
+	tasklet_disable(&tp->tl);
 	clear_bit(WORK_ENABLE, &tp->flags);
 	usb_kill_urb(tp->intr_urb);
 	cancel_delayed_work_sync(&tp->schedule);
@@ -2969,9 +2972,7 @@ static int rtl8152_close(struct net_device *netdev)
 		 */
 		rtl_runtime_suspend_enable(tp, false);
 
-		tasklet_disable(&tp->tl);
 		tp->rtl_ops.down(tp);
-		tasklet_enable(&tp->tl);
 
 		mutex_unlock(&tp->control);
 
@@ -3747,12 +3748,15 @@ static int rtl8152_probe(struct usb_interface *intf,
 	else
 		device_set_wakeup_enable(&udev->dev, false);
 
+	tasklet_disable(&tp->tl);
+
 	netif_info(tp, probe, netdev, "%s\n", DRIVER_VERSION);
 
 	return 0;
 
 out1:
 	usb_set_intfdata(intf, NULL);
+	tasklet_kill(&tp->tl);
 out:
 	free_netdev(netdev);
 	return ret;
