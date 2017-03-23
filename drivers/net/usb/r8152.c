@@ -1291,6 +1291,7 @@ static void intr_callback(struct urb *urb)
 		}
 	} else {
 		if (netif_carrier_ok(tp->netdev)) {
+			netif_stop_queue(tp->netdev);
 			set_bit(RTL8152_LINK_CHG, &tp->flags);
 			schedule_delayed_work(&tp->schedule, 0);
 		}
@@ -3168,6 +3169,9 @@ static void set_carrier(struct r8152 *tp)
 			napi_enable(&tp->napi);
 			netif_wake_queue(netdev);
 			netif_info(tp, link, netdev, "carrier on\n");
+		} else if (netif_queue_stopped(netdev) &&
+			   skb_queue_len(&tp->tx_queue) < tp->tx_qlen) {
+			netif_wake_queue(netdev);
 		}
 	} else {
 		if (netif_carrier_ok(netdev)) {
@@ -3708,8 +3712,18 @@ static int rtl8152_resume(struct usb_interface *intf)
 			tp->rtl_ops.autosuspend_en(tp, false);
 			napi_disable(napi);
 			set_bit(WORK_ENABLE, &tp->flags);
-			if (netif_carrier_ok(netdev))
-				rtl_start_rx(tp);
+
+			if (netif_carrier_ok(netdev)) {
+				if (rtl8152_get_speed(tp) & LINK_STATUS) {
+					rtl_start_rx(tp);
+				} else {
+					netif_carrier_off(netdev);
+					tp->rtl_ops.disable(tp);
+					netif_info(tp, link, netdev,
+						   "linking down\n");
+				}
+			}
+
 			napi_enable(napi);
 			clear_bit(SELECTIVE_SUSPEND, &tp->flags);
 			smp_mb__after_atomic();
