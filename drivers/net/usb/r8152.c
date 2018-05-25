@@ -1146,6 +1146,7 @@ out1:
 	return ret;
 }
 
+#ifdef CONFIG_ACPI
 /* Devices containing RTL8153-AD can support a persistent
  * host system provided MAC address.
  * Examples of this are Dell TB15 and Dell WD15 docks
@@ -1203,6 +1204,7 @@ amacout:
 	kfree(obj);
 	return ret;
 }
+#endif
 
 static int set_ethernet_addr(struct r8152 *tp)
 {
@@ -1213,12 +1215,14 @@ static int set_ethernet_addr(struct r8152 *tp)
 	if (tp->version == RTL_VER_01) {
 		ret = pla_ocp_read(tp, PLA_IDR, 8, sa.sa_data);
 	} else {
+#ifdef CONFIG_ACPI
 		/* if this is not an RTL8153-AD, no eFuse mac pass thru set,
 		 * or system doesn't provide valid _SB.AMAC this will be
 		 * be expected to non-zero
 		 */
 		ret = vendor_mac_passthru_addr_read(tp, &sa);
 		if (ret < 0)
+#endif
 			ret = pla_ocp_read(tp, PLA_BACKUP, 8, sa.sa_data);
 	}
 
